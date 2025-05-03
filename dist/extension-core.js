@@ -1,1 +1,161 @@
-!function(e,t){"object"==typeof exports&&"undefined"!=typeof module?t(exports):"function"==typeof define&&define.amd?define(["exports"],t):t((e="undefined"!=typeof globalThis?globalThis:e||self).extension={})}(this,(function(e){"use strict";let t,r;const a=["dist/chrome-browser-polyfill.js","dist/single-file.js"],n=["dist/chrome-browser-polyfill.js","dist/single-file-frames.js"];async function s(e,s){let o;if(await async function(e){const s=e.extensionScriptFiles||[];t||r||([t,r]=await Promise.all([i(a.concat(s)),i(n)]))}(s),!s.removeFrames)try{await browser.tabs.executeScript(e,{code:r,allFrames:!0,matchAboutBlank:!0,runAt:"document_start"})}catch(e){}try{await browser.tabs.executeScript(e,{code:t,allFrames:!1,runAt:"document_idle"}),o=!0}catch(e){}return o&&s.frameId&&await browser.tabs.executeScript(e,{code:"document.documentElement.dataset.requestedFrameId = true",frameId:s.frameId,matchAboutBlank:!0,runAt:"document_start"}),o}async function i(e){const t=e.map((async e=>{if("function"==typeof e)return"("+e.toString()+")();";{const t=await fetch(browser.runtime.getURL("../../../"+e));return(new TextDecoder).decode(await t.arrayBuffer())}}));let r="";for(const e of t)r+=await e;return r}const o="single-file-response-fetch",c=window.fetch;async function f(e,t={}){try{let t=await c(e,{cache:"force-cache"});return 401!=t.status&&403!=t.status&&404!=t.status||(t=await l(e)),t}catch(r){const a=await d({method:"singlefile.fetch",url:e,referrer:t.referrer});return{status:a.status,headers:{get:e=>a.headers&&a.headers[e]},arrayBuffer:async()=>new Uint8Array(a.array).buffer}}}async function u(e,t){const r=await d({method:"singlefile.fetchFrame",url:e,frameId:t.frameId,referrer:t.referrer});return{status:r.status,headers:new Map(r.headers),arrayBuffer:async()=>new Uint8Array(r.array).buffer}}async function d(e){const t=await browser.runtime.sendMessage(e);if(!t||t.error)throw new Error(t&&t.error&&t.error.toString());return t}function l(e){return new Promise(((t,r)=>{var a,n,s,i;a=new CustomEvent("single-file-request-fetch",{detail:e}),window.dispatchEvent(a),n=o,s=function a(n){var s,i,c;n.detail?n.detail.url==e&&(s=o,i=a,c=!1,window.removeEventListener(s,i,c),n.detail.response?t({status:n.detail.status,headers:new Map(n.detail.headers),arrayBuffer:async()=>n.detail.response}):r(n.detail.error)):r()},i=!1,window.addEventListener(n,s,i)}))}browser.runtime.onMessage.addListener((e=>{if("singlefile.fetchFrame"==e.method&&window.frameId&&window.frameId==e.frameId)return async function(e){try{let t=await c(e.url,{cache:"force-cache"});return 401!=t.status&&403!=t.status&&404!=t.status||(t=await Promise.race([l(e.url),new Promise(((e,t)=>setTimeout((()=>t()),5e3)))])),{status:t.status,headers:[...t.headers],array:Array.from(new Uint8Array(await t.arrayBuffer()))}}catch(e){return{error:e&&e.toString()}}}(e)})),e.getPageData=function(e,t,r,a={fetch:f,frameFetch:u}){return singlefile.getPageData(e,a,t,r)},e.injectScript=function(e,t){return s(e,t)},Object.defineProperty(e,"__esModule",{value:!0})}));
+(function (global, factory) {
+	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
+	typeof define === 'function' && define.amd ? define(['exports'], factory) :
+	(global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.extension = {}));
+})(this, (function (exports) { 'use strict';
+
+	/*
+	 * Copyright 2010-2020 Gildas Lormeau
+	 * contact : gildas.lormeau <at> gmail.com
+	 * 
+	 * This file is part of SingleFile.
+	 *
+	 *   The code in this file is free software: you can redistribute it and/or 
+	 *   modify it under the terms of the GNU Affero General Public License 
+	 *   (GNU AGPL) as published by the Free Software Foundation, either version 3
+	 *   of the License, or (at your option) any later version.
+	 * 
+	 *   The code in this file is distributed in the hope that it will be useful, 
+	 *   but WITHOUT ANY WARRANTY; without even the implied warranty of 
+	 *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero 
+	 *   General Public License for more details.
+	 *
+	 *   As additional permission under GNU AGPL version 3 section 7, you may 
+	 *   distribute UNMODIFIED VERSIONS OF THIS file without the copy of the GNU 
+	 *   AGPL normally required by section 4, provided you include this license 
+	 *   notice and a URL through which recipients can access the Corresponding 
+	 *   Source.
+	 */
+
+	/* global browser, window, CustomEvent, setTimeout */
+
+	const FETCH_REQUEST_EVENT = "single-file-request-fetch";
+	const FETCH_RESPONSE_EVENT = "single-file-response-fetch";
+	const HOST_FETCH_MAX_DELAY = 5000;
+	const addEventListener = (type, listener, options) => window.addEventListener(type, listener, options);
+	const dispatchEvent = event => window.dispatchEvent(event);
+	const removeEventListener = (type, listener, options) => window.removeEventListener(type, listener, options);
+	const fetch = (url, options) => window.fetch(url, options);
+
+	browser.runtime.onMessage.addListener(message => {
+		if (message.method == "singlefile.fetchFrame" && window.frameId && window.frameId == message.frameId) {
+			return onMessage(message);
+		}
+	});
+
+	async function onMessage(message) {
+		try {
+			let response = await fetch(message.url, { cache: "force-cache", headers: message.headers });
+			if (response.status == 401 || response.status == 403 || response.status == 404) {
+				response = await Promise.race(
+					[
+						hostFetch(message.url),
+						new Promise((resolve, reject) => setTimeout(() => reject(), HOST_FETCH_MAX_DELAY))
+					]);
+			}
+			return {
+				status: response.status,
+				headers: [...response.headers],
+				array: Array.from(new Uint8Array(await response.arrayBuffer()))
+			};
+		} catch (error) {
+			return {
+				error: error && error.toString()
+			};
+		}
+	}
+
+	async function fetchResource(url, options = {}) {
+		try {
+			let response = await fetch(url, { cache: "force-cache", headers: options.headers });
+			if (response.status == 401 || response.status == 403 || response.status == 404) {
+				response = await hostFetch(url);
+			}
+			return response;
+		}
+		catch (error) {
+			const response = await sendMessage({ method: "singlefile.fetch", url, headers: options.headers });
+			return {
+				status: response.status,
+				headers: { get: headerName => response.headers && response.headers[headerName] },
+				arrayBuffer: async () => new Uint8Array(response.array).buffer
+			};
+		}
+	}
+
+	async function frameFetch(url, options) {
+		const response = await sendMessage({ method: "singlefile.fetchFrame", url, frameId: options.frameId, headers: options.headers });
+		return {
+			status: response.status,
+			headers: new Map(response.headers),
+			arrayBuffer: async () => new Uint8Array(response.array).buffer
+		};
+	}
+
+	async function sendMessage(message) {
+		const response = await browser.runtime.sendMessage(message);
+		if (!response || response.error) {
+			throw new Error(response && response.error && response.error.toString());
+		} else {
+			return response;
+		}
+	}
+
+	function hostFetch(url) {
+		return new Promise((resolve, reject) => {
+			dispatchEvent(new CustomEvent(FETCH_REQUEST_EVENT, { detail: url }));
+			addEventListener(FETCH_RESPONSE_EVENT, onResponseFetch, false);
+
+			function onResponseFetch(event) {
+				if (event.detail) {
+					if (event.detail.url == url) {
+						removeEventListener(FETCH_RESPONSE_EVENT, onResponseFetch, false);
+						if (event.detail.response) {
+							resolve({
+								status: event.detail.status,
+								headers: new Map(event.detail.headers),
+								arrayBuffer: async () => event.detail.response
+							});
+						} else {
+							reject(event.detail.error);
+						}
+					}
+				} else {
+					reject();
+				}
+			}
+		});
+	}
+
+	/*
+	 * Copyright 2010-2020 Gildas Lormeau
+	 * contact : gildas.lormeau <at> gmail.com
+	 * 
+	 * This file is part of SingleFile.
+	 *
+	 *   The code in this file is free software: you can redistribute it and/or 
+	 *   modify it under the terms of the GNU Affero General Public License 
+	 *   (GNU AGPL) as published by the Free Software Foundation, either version 3
+	 *   of the License, or (at your option) any later version.
+	 * 
+	 *   The code in this file is distributed in the hope that it will be useful, 
+	 *   but WITHOUT ANY WARRANTY; without even the implied warranty of 
+	 *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero 
+	 *   General Public License for more details.
+	 *
+	 *   As additional permission under GNU AGPL version 3 section 7, you may 
+	 *   distribute UNMODIFIED VERSIONS OF THIS file without the copy of the GNU 
+	 *   AGPL normally required by section 4, provided you include this license 
+	 *   notice and a URL through which recipients can access the Corresponding 
+	 *   Source.
+	 */
+
+	function getPageData(options, doc, win, initOptions = { fetch: fetchResource, frameFetch }) {
+		return globalThis.singlefile.getPageData(options, initOptions, doc, win);
+	}
+
+	exports.getPageData = getPageData;
+
+	Object.defineProperty(exports, '__esModule', { value: true });
+
+}));
