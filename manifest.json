@@ -40,7 +40,8 @@
 		"service_worker": "dist/single-file-background.js"
 	},
 	"web_accessible_resources":  [
-		"dist/**"
+		"dist/**",
+		"injected.js"
 	],
 	"permissions": [
 		"activeTab",
