@@ -14,9 +14,10 @@
 			],
 			"run_at": "document_start",
 			"js": [
-				"dist/chrome-browser-polyfill.js",
-				"dist/single-file-frames.js",
-				"dist/extension-frames.js"
+				"lib/chrome-browser-polyfill.js",
+				"lib/single-file-frames.js",
+				"lib/single-file-extension-frames.js",
+				"lib/single-file-hooks-frames.js"
 			],
 			"all_frames": true,
 			"match_about_blank": true
@@ -27,20 +28,31 @@
 			],
 			"run_at": "document_start",
 			"js": [
-				"dist/chrome-browser-polyfill.js",
-				"dist/single-file-bootstrap.js",
-				"dist/extension-core.js",
-				"dist/single-file.js",
+				
+				"lib/chrome-browser-polyfill.js",
+				"lib/single-file-bootstrap.js",
+				"lib/single-file-extension-core.js",
+				"lib/single-file.js",
+				"lib/single-file-z-worker.js",
+				"lib/single-file-zip.min.js",
 				"index.js"
 			],
 			"all_frames": false
 		}
 	],
 	"background": {
-		"service_worker": "dist/single-file-background.js"
+		"service_worker": "lib/single-file-background.js"
 	},
 	"web_accessible_resources":  [
-		"dist/**"
+		{
+			"matches": [
+				"<all_urls>"
+			],
+			"resources": [
+				"lib/**",
+				"injected.js"
+			]
+		}
 	],
 	"permissions": [
 		"activeTab",
@@ -49,5 +61,5 @@
 	"host_permissions": [
 		"<all_urls>"
 	],
-	"manifest_version": 2
+	"manifest_version": 3
 }
